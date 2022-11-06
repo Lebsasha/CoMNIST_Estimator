@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 
-from base64 import b64encode, b64decode
-from io import BytesIO
+import base64
+import io
+import difflib
+import re
+import sys
 
 import numpy as np
-from PIL import Image, ImageOps
-from difflib import SequenceMatcher
-import re
+import PIL.Image, PIL.ImageOps
+import cv2
 
 import image_disp
+
+import matplotlib.pyplot as plt
 
 def load(imfile="Greg.png"):
     """
@@ -16,13 +20,13 @@ def load(imfile="Greg.png"):
     (Essentially for testing purposes)
     Returns an image
     """
-    with Image.open(imfile) as image:
+    with PIL.Image.open(imfile) as image:
         img = image.copy()
     img = img.convert("L")
     return img
 
 
-def get_intensity(im, horizontal=True):
+def get_intensity(im, horizontal):
     """
     Returns an array of the intensity along the requested dimension
     """
@@ -32,17 +36,14 @@ def get_intensity(im, horizontal=True):
         return 255 / np.mean(im, axis=1) - 1
 
 
-def next_position(im, start_position=0, blank=True, horizontal=True):
+def next_position(im, start_position, blank, horizontal):
     """
     Helper function
     In image, identifies the next area after start position that is
     either blank or not blank.
     Scan can happen horizontally or vertically
     """
-    if horizontal:
-        intensity = get_intensity(im)
-    else:
-        intensity = get_intensity(im, horizontal=False)
+    intensity = get_intensity(im, horizontal=horizontal)
     intensity = intensity[start_position:]
     if blank:
         next_lim = np.argmax(intensity == 0)
@@ -50,60 +51,56 @@ def next_position(im, start_position=0, blank=True, horizontal=True):
         next_lim = np.argmax(intensity > 0)
     return start_position + next_lim
 
-def last_position(im, start_position=0, blank=True, horizontal=True):
+def last_position(im, start_position, blank, horizontal):
     """
     Helper function
     In image, identifies the last area after start position that is
     either blank or not blank.
     Scan can happen horizontally or vertically
     """
-    if horizontal:
-        intensity = get_intensity(im)
-    else:
-        intensity = get_intensity(im, horizontal=False)
+    intensity = get_intensity(im, horizontal=horizontal)
     intensity = intensity[start_position:]
     inverted_intensity = intensity[::-1]
     if blank:
         next_lim = np.argmax(inverted_intensity == 0)
     else:
         next_lim = np.argmax(inverted_intensity > 0)
-    return start_position + (len(inverted_intensity) - next_lim )
+    return start_position + (len(inverted_intensity) - next_lim)
 
 
 def get_contours(im):
     """
     Identifies letters contours for our image
-    Returns a an array with upper left and lower right coordinate of each box
+    Returns an array with upper left and lower right coordinate of each box
     """
-    max_nb_letters = 50
+    max_nb_letters = 150
     boxes = np.empty((max_nb_letters, 4), dtype=int)
-    width = im.width
-    height = im.height
-    intensity_h = get_intensity(im)
+    intensity_h = get_intensity(im, horizontal=True)
     next_lim, right_lim = 0, 0
-    i = 0
+    actual_num_of_letters = 0
 
     # horizontal_countours   
-    while (next_lim < len(intensity_h)) & (i < max_nb_letters):
-        left_lim = next_position(im, next_lim, blank=False)
+    while (next_lim < len(intensity_h)) & (actual_num_of_letters < max_nb_letters):
+        left_lim = next_position(im, next_lim, blank=False, horizontal=True)
         # we have reached the last letter followed by blank
-        if left_lim == right_lim + 1:
+        if left_lim == next_lim:
             break
-        right_lim = next_position(im, left_lim)
+        right_lim = next_position(im, left_lim, blank=True, horizontal=True)
         # we have reached last letter which is next to right frame
         if right_lim == left_lim:
             right_lim = len(intensity_h)
-        else:
-            right_lim -= 1
+        # else:
+        #     right_lim -= 1
         next_lim = right_lim + 1
-        boxes[i, 0] = left_lim
-        boxes[i, 2] = right_lim
-        i += 1
+        boxes[actual_num_of_letters, 0] = left_lim
+        boxes[actual_num_of_letters, 2] = right_lim
+        actual_num_of_letters += 1
 
     # Reduce the box size to the number of letters
-    boxes = boxes[:i, :]
+    boxes = boxes[:actual_num_of_letters, :]
 
     # vertical_countours   
+    height = im.height
     for j in range(boxes.shape[0]):
         left_lim = boxes[j, 0]
         right_lim = boxes[j, 2]
@@ -113,8 +110,8 @@ def get_contours(im):
         # top of the letter is next to the frame
         if high_lim == low_lim:
             high_lim = height
-        else:
-            high_lim -= 1
+        # else:
+        #     high_lim -= 1
         boxes[j, 1] = low_lim
         boxes[j, 3] = high_lim
 
@@ -124,8 +121,8 @@ def get_contours(im):
 def get_spaces(im):
     """
     Identifies spaces contours for our image
-    There is always always one more space than number of letters
-    Returns a an array with upper left and lower right coordinate of each box
+    There is always one more space than number of letters
+    Returns an array with upper left and lower right coordinate of each box
     """
     width = im.width
     contours = get_contours(im)
@@ -177,39 +174,14 @@ def crop_letters(im):
     """
     return [pad_resize(im.crop(contour), -1) for contour in get_contours(im)]
 
-def img_to_b64(img):
-    """
-    Helper function
-    Converts image to base64
-    """
-    in_mem_file = BytesIO()
-    img.save(in_mem_file, format="PNG")
-    in_mem_file.seek(0)
-    img_bytes = in_mem_file.read()
 
-    base64_encoded_result_bytes = b64encode(img_bytes)
-    base64_encoded_result_str = base64_encoded_result_bytes.decode('ascii')
-    return base64_encoded_result_str
-
-
-def b64_to_img(img64):
-    """
-    Helper function
-    Converts base64 to image
-    """
-    return Image.open(BytesIO(b64decode(img64)))
-
-
-def crop_resize(im, size=32):
+def crop_resize(im, size):
     """ 
     Crops image to remove as much whitespace as possible
     If size is set to anything greater than 0, resize the image to a square
     
     Returns: an image object of the desized size
     """
-
-    height = im.height
-    width = im.width
 
     # Compute vertical intensity
     intensity_v = get_intensity(im, horizontal=False)
@@ -219,7 +191,7 @@ def crop_resize(im, size=32):
     v_max = np.min([len(intensity_v) - np.argmax(intensity_v[::-1] > 0) - 1, len(intensity_v)])
 
     # Compute horizontal intensity
-    intensity_h = get_intensity(im)
+    intensity_h = get_intensity(im, horizontal=True)
 
     # Compute horizontal limits
     h_min = np.max([0, np.argmax(intensity_h > 0)])
@@ -233,7 +205,7 @@ def crop_resize(im, size=32):
     return img
 
 
-def pad_resize(im, size=32):
+def pad_resize(im, size):
     """ 
     Adds white margins to image to make it square
     If size is set to anything greater than 0, resizes the image
@@ -261,26 +233,27 @@ def pad_resize(im, size=32):
     else:
         new_npim = npim
 
-    img = Image.fromarray(new_npim.astype(np.uint8))
+    img = PIL.Image.fromarray(new_npim.astype(np.uint8))
     img = img.convert("L")
 
     if size > 0:
         img = img.resize((size, size))
-    #plt.imshow(img);plt.show()
+    plt.figure(); plt.imshow(img); plt.show()
     return img
 
 def score_word(word_in, words_out, img):
-    """Compares expected word and read word, flag discrepancies
+    """
+    Compares expected word and read word, flag discrepancies
 
     :param word_in: string
         the expected word
-    :param word_out: string
+    :param words_out: string
         the read word
     :param img: PIL.Image
         the original image
-    :return: PIL.Image
+    :return: [PIL.Image, int]
         in case of discrepancies, an image highlighting wrong/missing letters
-        otherwise image is unchanged
+        otherwise returns image unchanged, and flag if it changed
     """
     correct = 0
 
@@ -303,7 +276,7 @@ def score_word(word_in, words_out, img):
 
     # Handle case with expected/predicted of different length
     else:
-        s = SequenceMatcher(None, word_in, word_out)
+        s = difflib.SequenceMatcher(None, word_in, word_out)
         match = s.get_matching_blocks()
         diff = np.ones(len(word_out))
         miss = np.ones(len(word_in))
@@ -315,7 +288,7 @@ def score_word(word_in, words_out, img):
             miss[low_miss:low_miss + high] = 0
 
         # Draw contours
-        #img = image_disp.draw_contours(img)
+        # img = image_disp.draw_contours(img)
 
         # Gray out wrong letters
         img = image_disp.gray_out_letter(img, *np.where(diff == 1))
@@ -326,6 +299,29 @@ def score_word(word_in, words_out, img):
 
     return img, correct
 
+
+def img_to_b64(img):
+    """
+    Helper function
+    Converts image to base64
+    """
+    in_mem_file = io.BytesIO()
+    img.save(in_mem_file, format="PNG")  # Or jpeg
+    in_mem_file.seek(0)
+    img_bytes = in_mem_file.read()
+
+    base64_encoded_result_bytes = base64.b64encode(img_bytes)
+    base64_encoded_result_str = base64_encoded_result_bytes.decode('ascii')
+    return base64_encoded_result_str
+
+
+def b64_to_img(img64):
+    """
+    Helper function
+    Converts base64 to image
+    """
+    return PIL.Image.open(io.BytesIO(base64.b64decode(img64)))
+
 def b64_remove_header(im):
     """Removes the b64 header
 
@@ -333,14 +329,15 @@ def b64_remove_header(im):
     :return: b64 img without b64 header
     """
     img = im
-    if (img[:4] == "data"):
+    if img[:4] == "data":
         img = re.sub(r'data:image/[^;]+;base64,', r'', img)
     return img
 
-def b64_preprocess(im):
+def b64_preprocess(im, is_binarize):
     """Converts b64 image to Image and ensure it has proper background/properties
 
     :param im: raw b64 image
+    :param is_binarize if image must be binarized
     :return: img: image
     """
 
@@ -348,16 +345,26 @@ def b64_preprocess(im):
     img = b64_to_img(im)
 
     # Add a white background to the image
-    try:
-        blank = Image.new('L', img.size, color=255)
-        img.paste(blank, (0, 0), mask=img)
-        img = img.convert("L")
-    except Exception as e:
-        print(repr(e))
+    if img.mode == 'RGBA' or img.mode == 'RGBa':
+        try:
+            blank = PIL.Image.new('L', img.size, color=255)
+            img.paste(blank, (0, 0), mask=img)
+        except Exception as e:
+            print(f'Warning! When trying to add background catch exception {repr(e)}', file=sys.stderr)
+
+    img = img.convert("L")
 
     # Get negative of image in case it is white on black
-    img_np = np.array(img)
-    if (np.mean(img_np) < 128):
-        img = ImageOps.invert(img)
+    if np.mean(np.array(img)) < 128:
+        img = PIL.ImageOps.invert(img)
         print("Inverted image")
+
+    if is_binarize:
+        # Binarize image
+        # img_np = np.array(img)
+        # bin_threshold = 128
+        # img = (img_np > bin_threshold) * 255
+        img_bin: np.ndarray = cv2.threshold(np.array(img), 128, 255, cv2.THRESH_OTSU)[1]
+        img = PIL.Image.fromarray(img_bin)
+
     return img

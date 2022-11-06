@@ -29,7 +29,7 @@ def draw_contours(im):
     return im
 
 
-def gray_out_letter(im, pos=[0], col=192):
+def gray_out_letter(im, pos=None, col=192):
     """Replace any non white color within letter contours with gray
 
     :param im: PIL.Image
@@ -41,6 +41,8 @@ def gray_out_letter(im, pos=[0], col=192):
         the modified image with grayed out incorrect letters
     """
 
+    if pos is None:
+        pos = [0]
     contours = image_proc.get_contours(im)
     npim = np.array(im)
     for p in pos:
@@ -52,7 +54,7 @@ def gray_out_letter(im, pos=[0], col=192):
     return im2
 
 
-def flag_missing_letter(im, pos=[0], col=128):
+def flag_missing_letter(im, pos=None, col=128):
     """Flags missing letters wherever they occur
 
     :param im: PIL.Image
@@ -64,6 +66,8 @@ def flag_missing_letter(im, pos=[0], col=128):
         the modified image with question mark flagging missing letters
     """
     # Load question mark image
+    if pos is None:
+        pos = [0]
     with Image.open(q_mark_path) as image:
         q_mark_im = image.copy()
     q_mark_im = q_mark_im.convert("L")
@@ -81,7 +85,7 @@ def flag_missing_letter(im, pos=[0], col=128):
     # Add question marks
     for i, p in enumerate(pos):
         left, low, right, high = spaces[p, :]
-        if (right-left > average_width):
+        if right-left > average_width:
             right = left+average_width
         question_mark_im = q_mark_im.resize((right + 1 - left,high - low))
         question_mark = np.array(question_mark_im)
