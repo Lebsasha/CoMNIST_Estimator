@@ -9,10 +9,9 @@ import sys
 import numpy as np
 import PIL.Image, PIL.ImageOps
 import cv2
+# import matplotlib.pyplot as plt
 
 import image_disp
-
-import matplotlib.pyplot as plt
 
 def load(imfile="Greg.png"):
     """
@@ -82,10 +81,10 @@ def get_contours(im):
     # horizontal_countours   
     while (next_lim < len(intensity_h)) & (actual_num_of_letters < max_nb_letters):
         left_lim = next_position(im, next_lim, blank=False, horizontal=True)
-        # we have reached the last letter followed by blank
-        if left_lim == next_lim:
-            break
         right_lim = next_position(im, left_lim, blank=True, horizontal=True)
+        # we have reached the last letter followed by blank
+        if left_lim == next_lim and left_lim == right_lim:
+            break
         # we have reached last letter which is next to right frame
         if right_lim == left_lim:
             right_lim = len(intensity_h)
@@ -188,14 +187,14 @@ def crop_resize(im, size):
 
     # Compute vertical limits
     v_min = np.max([0, np.argmax(intensity_v > 0)])
-    v_max = np.min([len(intensity_v) - np.argmax(intensity_v[::-1] > 0) - 1, len(intensity_v)])
+    v_max = np.min([len(intensity_v) - np.argmax(intensity_v[::-1] > 0) , len(intensity_v)])
 
     # Compute horizontal intensity
     intensity_h = get_intensity(im, horizontal=True)
 
     # Compute horizontal limits
     h_min = np.max([0, np.argmax(intensity_h > 0)])
-    h_max = np.min([len(intensity_h) - np.argmax(intensity_h[::-1] > 0) - 1, len(intensity_h)])
+    h_max = np.min([len(intensity_h) - np.argmax(intensity_h[::-1] > 0) , len(intensity_h)])
 
     img = im.crop(box=(h_min, v_min, h_max, v_max))
 
@@ -222,7 +221,10 @@ def pad_resize(im, size):
     new_npim = np.zeros((shape, shape))
     new_npim[:, :] = 255
     diff = np.abs(width - height)
-    stride = diff // 2
+    if diff % 2 == 0:
+        stride = diff // 2
+    else:
+        stride = diff // 2 + 1
 
     if height > width:
         # letter is wide
@@ -237,8 +239,9 @@ def pad_resize(im, size):
     img = img.convert("L")
 
     if size > 0:
-        img = img.resize((size, size))
-    plt.figure(); plt.imshow(img); plt.show()
+        img = im.resize((size, size))
+
+    # plt.figure(); plt.imshow(img); plt.show()
     return img
 
 def score_word(word_in, words_out, img):

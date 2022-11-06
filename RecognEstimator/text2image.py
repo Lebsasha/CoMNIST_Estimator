@@ -1,25 +1,39 @@
 # coding=utf8
+
+# Builtin
+import math
 import os
 import sys
 from io import BytesIO
 import base64
+
+# Dependencies
 import PIL
 import PIL.Image, PIL.ImageDraw, PIL.ImageFont
 
 
-def text2image(text, color="#000", bgcolor="#FFF", fontfullpath=os.path.join("Fonts", "CourierNew.ttf"), fontsize=20, leftpadding=3, rightpadding=3,
-               width=200, top_padding=2, bottom_padding=2, isDebug=False) -> PIL.Image:
+def text2image(text, color="#000", bgcolor="#FFF", fontpath=os.path.join("Fonts", "OcrABeckerRus_Lat.otf"), fontsize=20, leftpadding=3, rightpadding=3,
+               width=0, top_padding=2, bottom_padding=2, isDebug=False) -> PIL.Image:
 
     REPLACEMENT_CHARACTER = u'\uFFFD'
     NEWLINE_REPLACEMENT_STRING = ' ' + REPLACEMENT_CHARACTER + ' '
 
     # ImageFont.lo
-    font = PIL.ImageFont.load_default() if fontfullpath is None else PIL.ImageFont.truetype(fontfullpath, fontsize)
+    font = PIL.ImageFont.load_default() if fontpath is None else PIL.ImageFont.truetype(fontpath, fontsize)
 
     text = text.replace('\n', NEWLINE_REPLACEMENT_STRING)
 
     lines = []
     line = u""
+
+    # If width == 0, try to guess image width for fitting at least one word
+    if width is None or width == 0:
+        max_len_of_word = max([len(w) for w in text.split()])
+        num_of_letters = 20
+        sample_string = 'Щ'*num_of_letters  # one of most long letters in russian alphabet
+        sample_string_size = font.getbbox(sample_string)
+        one_letter_width = (sample_string_size[2] - sample_string_size[0]) / num_of_letters
+        width = math.ceil(one_letter_width * max_len_of_word + leftpadding + rightpadding)  # maximum possible length of text in image
 
     for word in text.split():
         if isDebug:
@@ -30,18 +44,19 @@ def text2image(text, color="#000", bgcolor="#FFF", fontfullpath=os.path.join("Fo
             lines.append(u"")  # the blank line
         elif font.getlength(line + ' ' + word) <= (width - rightpadding - leftpadding):
             line += ' ' + word
-        else:  # start a new line
-            lines.append(line[1:])  # slice the white space in the begining of the line
-            line = u""
-
-            # TODO: handle too long words at this point
-            if font.getlength(word) < (width - rightpadding - leftpadding):
-                line += ' ' + word  # for now, assume no word alone can exceed the line width
+        else:
+            if len(line) != 0:  # start a new line
+                lines.append(line[1:])  # slice the white space in the begining of the line
+                line = u" " + word
             else:
-                # raise NotImplementedError('Handling of too big words not implemented')
-                # list = textwrap.wrap(text, width=30)
-                print(f'Warning! Truncating word while trying to fit word \'{word}\' in image with width {width}', file=sys.stderr)
-                line += ' ' + word
+                # Try to handle too long words
+                if font.getlength(word) <= (width - rightpadding - leftpadding):
+                    line += ' ' + word  # Add space as it will be eaten later when append a line to lines
+                else:
+                    print(f'Warning! Truncating word \'{word}\' while trying to fit in image with width {width}', file=sys.stderr)
+                    line += ' ' + word
+                    # list = textwrap.wrap(text, width=30)
+                    # raise NotImplementedError('Handling of too big words not implemented')
 
     if len(line) != 0:
         lines.append(line[1:])  # add the last line

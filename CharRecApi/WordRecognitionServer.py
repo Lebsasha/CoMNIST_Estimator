@@ -11,16 +11,16 @@ from app import app, api
 import image_proc
 import model
 
-DEBUG = True
+DEBUG = False
 
 @api.route("/api/word")
 class Prediction(flask_restful.Resource):
     def post(self):
         """API that expects an b64 image as input, analyze it
         and returns the word it represents
-        Language has to be provided as different alphabets are handled differently
-        Expected word can be provided too
-        Number of most probable letters also could be supplied (for debuging purpose) (default value of it is 1)
+        Language has to be provided as different alphabets are handled differently. Also, if image need to be binarized have to be supplied.
+        Expected word can be provided too.
+        Number of most probable letters also could be supplied (for debugging purpose) (default value of it is 1)
 
         :return: json
             a json containing the read word (string) and if expected word was provided,
@@ -67,7 +67,11 @@ class Prediction(flask_restful.Resource):
             words_out = word_predictor_ru(img, num_of_letters)
         else:
             raise AttributeError(f"'lang' parameter '{lang_in}' is nor 'en', nor 'ru'")
-        word_out = ''.join(list(words_out[:,0]))
+        if words_out.size != 0:
+            word_out = ''.join(list(words_out[:, 0]))
+        else:
+            response['word'] = ""
+            return json.dumps(response)
 
         response["word"] = word_out
 
@@ -75,7 +79,7 @@ class Prediction(flask_restful.Resource):
             print("Found word: %s" % word_out)
             if num_of_letters > 1:
                 for i in range(1, num_of_letters):
-                    print("Alternatively word could be %s" % ''.join(list(words_out[:,i])))
+                    print("Alternatively word could be %s" % ''.join(list(words_out[:, i])))
 
         # Compare read word with expected word
         if word_in is not None and len(word_in) != 0:
@@ -84,7 +88,9 @@ class Prediction(flask_restful.Resource):
             # Convert image back to base64 to be sent to the requestor
             response["img"] = image_proc.img_to_b64(img)
 
-        print("Time spent handling the request: %f" % (time.time() - start))
+        if DEBUG:
+            print("Time spent handling the request: %f" % (time.time() - start))
+
         return json.dumps(response)
 
 

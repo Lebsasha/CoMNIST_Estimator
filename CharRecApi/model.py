@@ -30,7 +30,7 @@ def load_model(weights_filename, nb_classes):
     np.random.seed(7)
 
     # number of convolutional filters to use
-    nb_filters = 31
+    nb_filters = 32
     nb_filters2 = 64
     nb_filters3 = 128
     # size of pooling area for max pooling
@@ -67,8 +67,8 @@ def load_model(weights_filename, nb_classes):
     model.add(Dense(nb_classes))
 
     # load weights
-    # if os.path.exists(weights_filename):
-        # model.load_weights(weights_filename)
+    if os.path.exists(weights_filename):
+        model.load_weights(weights_filename)
 
     # Finally compile model (required to make predictions)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -77,7 +77,7 @@ def load_model(weights_filename, nb_classes):
 
     return model
 
-
+import tensorflow as tf
 def load_letter_predictor(weights_filename, lang_in):
     """Create a function that will classify images to letters
 
@@ -114,7 +114,8 @@ def load_letter_predictor(weights_filename, lang_in):
         img = np.reshape(img, (1, SIZE, SIZE, 1))
 
         # Compute probability for each possible letter
-        proba_list = model.predict(img, verbose=0)[0]  # TODO Change in occurrence of performance issues
+        # proba_list = model.predict(img, verbose=0)[0]  # TODO Change in occurrence of performance issues
+        proba_list = model(img)[0].numpy()  # TODO Change in occurrence of performance issues
         probable_letters_list = []
         for _ in range(nb_output):
             # Get index of most probable letter not already identified
@@ -154,7 +155,7 @@ def load_word_predictor(weights_filename, lang_in):
 
         cropped_letters = image_proc.crop_letters(img)
         # word = np.empty((len(cropped_letters), nb_output), dtype=object)
-        word = []  # List<List<str>>
+        word_as_list = []  # List<List<str>>
         # nb_letters = 0
         for i in range(len(cropped_letters)):
             letters = letter_predictor(cropped_letters[i], nb_output)
@@ -162,13 +163,16 @@ def load_word_predictor(weights_filename, lang_in):
             exceptional_letter = False
             if lang_in == 'ru':
                 if letters[0] == 'I':
-                    if len(word) >= 1 and word[-1] == 'Ь':
-                        word[-1][0] = u'Ы'
+                    if len(word_as_list) >= 1 and word_as_list[-1] == 'Ь':
+                        word_as_list[-1][0] = u'Ы'
                         exceptional_letter = True
+                    else:
+                        letters = ['Т']*nb_output  # If we recognized pure 'I', maybe it was 'Т'
             if not exceptional_letter:
-                word.append(letters)
+                word_as_list.append(letters)
                 # nb_letters += 1
 
+        word = np.array(word_as_list)
         return word
 
     return word_predictor
