@@ -1,2 +1,4 @@
-/CoMNIST other/CharRecApi/
 *.png
+__pycache__
+Cyrillic
+Latin
