@@ -27,22 +27,22 @@ import text2image
 
 class Mode(enum.Enum):
     SingleWord = 1,
-    Multiple = 2
+    MultipleWords = 2
 
 if __name__ == '__main__':
 
     # For debug
-    mode = Mode.Multiple
+    mode = Mode.MultipleWords
 
     # Modeling arguments
     is_binarize = True
     text2image_params = {'fontpath': os.path.join("Fonts", "Consolas.ttf"), 'fontsize': 40}
-    num_of_words = 100
+    num_of_words = 4000
 
     # Some other arguments
     output_folder = 'Out'
 
-    if mode is Mode.Multiple:
+    if mode is Mode.MultipleWords:
 
         begin_time = time.time()
 
@@ -123,8 +123,8 @@ if __name__ == '__main__':
 
 
     elif mode == Mode.SingleWord:
-        word = 'Привет'
-        # word ='Свежеприготовленный пирог'
+        # word = 'Привет'
+        word = 'Свежеприготовленный пирог'
         word = word.upper()
         text2image.text2png(word, f'{word}.png', **text2image_params)
         imgAsString = text2image.image2b64(text2image.text2image(word, **text2image_params))

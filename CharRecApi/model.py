@@ -115,7 +115,7 @@ def load_letter_predictor(weights_filename, lang_in):
 
         # Compute probability for each possible letter
         # proba_list = model.predict(img, verbose=0)[0]  # TODO Change in occurrence of performance issues
-        proba_list = model(img)[0].numpy()  # TODO Change in occurrence of performance issues
+        proba_list = model(img, training=False)[0].numpy()
         probable_letters_list = []
         for _ in range(nb_output):
             # Get index of most probable letter not already identified
