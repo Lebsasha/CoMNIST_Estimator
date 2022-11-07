@@ -47,23 +47,29 @@ def text2image(text, color="#000", bgcolor="#FFF", fontpath=os.path.join("Fonts"
     lines = []
     line = u""
 
-    for word in text.split():
-        if word == NEWLINE_REPLACEMENT_CHARACTER:  # give a blank line
+    words = text.split()
+    words_len = len(words)
+    i = 0
+    while i < words_len:
+        if words[i] == NEWLINE_REPLACEMENT_CHARACTER:  # give a blank line
             lines.append(line)  # slice the white space in the begining of the line
             lines.append(u"")  # the blank line
             line = u""
+            i += 1
         # Try to append current word in line
-        elif font.getlength(line + ' ' if line != u'' else '' + word) <= (width - right_padding - left_padding):
+        elif font.getlength(line + (' ' if line != u'' else '') + words[i]) <= (width - right_padding - left_padding):
             if line == u"":
-                line = word
+                line = words[i]
             else:
-                line += u' ' + word
-        elif len(line) != 0:  # Couldn't append word, try to start a new line
+                line += u' ' + words[i]
+            i += 1
+        elif len(line) != 0:  # Couldn't append word, try to fit on a new line (on next iteration)
             lines.append(line)
-            line = u"" + word
+            line = u""
         else:  # Handle too long words
-            print(f'Warning! Truncating word \'{word}\' while trying to fit in image with width {width}', file=sys.stderr)
-            line += ' ' + word
+            print(f'Warning! Truncating word \'{words[i]}\' while trying to fit in image with width {width}', file=sys.stderr)
+            line += ' ' + words[i]
+            i += 1
             # raise NotImplementedError('Handling of too big words not implemented')
 
     if len(line) != 0:
@@ -104,4 +110,7 @@ def image2b64(img: PIL.Image) -> str:
 if __name__ == '__main__':
     # test functions
     # text2png(u"This is\na\ntest папа şğıöç zaa xd ve lorem hipster", 'test.png', fontfullpath=r"TimesNewRomanPsmt.ttf")
-    text2png(u"This is a test папа şğıöç", 'test1.png', fontfullpath=os.path.join("Fonts", "TimesNewRomanPsmt.ttf"))
+    text2png(u"This is a test папа şğıöç", 'test1.png', fontpath=os.path.join("Fonts", "TimesNewRomanPsmt.ttf"))
+    text2png(u"This is a test папа şğıöç", 'test2.png', fontpath=os.path.join("Fonts", "TimesNewRomanPsmt.ttf"), width_fit_algo=WidthFittingAlgo.At_least_one_word)
+    text2png(u"This is a test папа şğıöç", 'test3.png', fontpath=os.path.join("Fonts", "TimesNewRomanPsmt.ttf"), width_fit_algo=WidthFittingAlgo.Manually, width_manual=100)
+    text2png(u"This is a test папа şğıöç", 'test4.png', fontpath=os.path.join("Fonts", "TimesNewRomanPsmt.ttf"), width_fit_algo=WidthFittingAlgo.Manually, width_manual=20)
